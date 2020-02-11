@@ -1,15 +1,14 @@
+import flor
 import logging
 import os
 import time
 from itertools import cycle
-
 import numpy as np
 import torch
 import torch.optim
 import torch.utils.data
 from apex.parallel import DistributedDataParallel as DDP
 from mlperf_compliance import mlperf_log
-
 from seq2seq.train.fp_optimizers import Fp16Optimizer
 from seq2seq.train.fp_optimizers import Fp32Optimizer
 from seq2seq.train.lr_scheduler import WarmupMultiStepLR
@@ -22,28 +21,16 @@ class Seq2SeqTrainer:
     """
     Seq2SeqTrainer
     """
-    def __init__(self,
-                 model,
-                 criterion,
-                 opt_config,
-                 scheduler_config,
-                 print_freq=10,
-                 save_freq=1000,
-                 grad_clip=float('inf'),
-                 batch_first=False,
-                 save_info={},
-                 save_path='.',
-                 train_iterations=0,
-                 checkpoint_filename='checkpoint%s.pth',
-                 keep_checkpoints=5,
-                 math='fp32',
-                 cuda=True,
-                 distributed=False,
-                 intra_epoch_eval=0,
-                 iter_size=1,
-                 translator=None,
-                 verbose=False):
-        """
+
+    def __init__(self, model, criterion, opt_config, scheduler_config,
+        print_freq=10, save_freq=1000, grad_clip=float('inf'), batch_first=
+        False, save_info={}, save_path='.', train_iterations=0,
+        checkpoint_filename='checkpoint%s.pth', keep_checkpoints=5, math=
+        'fp32', cuda=True, distributed=False, intra_epoch_eval=0, iter_size
+        =1, translator=None, verbose=False):
+        try:
+            flor.namespace_stack.new()
+            """
         Constructor for the Seq2SeqTrainer.
 
         :param model: model to train
@@ -70,63 +57,101 @@ class Seq2SeqTrainer:
         :param translator: instance of Translator, runs inference on test set
         :param verbose: enables verbose logging
         """
-        super(Seq2SeqTrainer, self).__init__()
-        self.model = model
-        self.criterion = criterion
-        self.epoch = 0
-        self.save_info = save_info
-        self.save_path = save_path
-        self.save_freq = save_freq
-        self.save_counter = 0
-        self.checkpoint_filename = checkpoint_filename
-        self.checkpoint_counter = cycle(range(keep_checkpoints))
-        self.opt_config = opt_config
-        self.cuda = cuda
-        self.distributed = distributed
-        self.print_freq = print_freq
-        self.batch_first = batch_first
-        self.verbose = verbose
-        self.loss = None
-        self.translator = translator
-        self.intra_epoch_eval = intra_epoch_eval
-        self.iter_size = iter_size
-
-        if cuda:
-            self.model = self.model.cuda()
-            self.criterion = self.criterion.cuda()
-
-        if math == 'fp16':
-            self.model = self.model.half()
-
-        if distributed:
-            self.model = DDP(self.model)
-
-        if math == 'fp16':
-            self.fp_optimizer = Fp16Optimizer(self.model, grad_clip)
-            params = self.fp_optimizer.fp32_params
-        elif math == 'fp32':
-            self.fp_optimizer = Fp32Optimizer(self.model, grad_clip)
-            params = self.model.parameters()
-
-        opt_name = opt_config.pop('optimizer')
-        self.optimizer = torch.optim.__dict__[opt_name](params, **opt_config)
-        logging.info(f'Using optimizer: {self.optimizer}')
-        gnmt_print(key=mlperf_log.OPT_NAME,
-                   value=mlperf_log.ADAM, sync=False)
-        gnmt_print(key=mlperf_log.OPT_LR,
-                   value=opt_config['lr'], sync=False)
-        gnmt_print(key=mlperf_log.OPT_HP_ADAM_BETA1,
-                   value=self.optimizer.defaults['betas'][0], sync=False)
-        gnmt_print(key=mlperf_log.OPT_HP_ADAM_BETA2,
-                   value=self.optimizer.defaults['betas'][1], sync=False)
-        gnmt_print(key=mlperf_log.OPT_HP_ADAM_EPSILON,
-                   value=self.optimizer.defaults['eps'], sync=False)
-
-        self.scheduler = WarmupMultiStepLR(self.optimizer, train_iterations,
-                                           **scheduler_config)
+            super(Seq2SeqTrainer, self).__init__()
+            self.model = model
+            flor.namespace_stack.test_force(self.model, 'self.model')
+            self.criterion = criterion
+            flor.namespace_stack.test_force(self.criterion, 'self.criterion')
+            self.epoch = 0
+            flor.namespace_stack.test_force(self.epoch, 'self.epoch')
+            self.save_info = save_info
+            flor.namespace_stack.test_force(self.save_info, 'self.save_info')
+            self.save_path = save_path
+            flor.namespace_stack.test_force(self.save_path, 'self.save_path')
+            self.save_freq = save_freq
+            flor.namespace_stack.test_force(self.save_freq, 'self.save_freq')
+            self.save_counter = 0
+            flor.namespace_stack.test_force(self.save_counter,
+                'self.save_counter')
+            self.checkpoint_filename = checkpoint_filename
+            flor.namespace_stack.test_force(self.checkpoint_filename,
+                'self.checkpoint_filename')
+            self.checkpoint_counter = cycle(range(keep_checkpoints))
+            flor.namespace_stack.test_force(self.checkpoint_counter,
+                'self.checkpoint_counter')
+            self.opt_config = opt_config
+            flor.namespace_stack.test_force(self.opt_config, 'self.opt_config')
+            self.cuda = cuda
+            flor.namespace_stack.test_force(self.cuda, 'self.cuda')
+            self.distributed = distributed
+            flor.namespace_stack.test_force(self.distributed,
+                'self.distributed')
+            self.print_freq = print_freq
+            flor.namespace_stack.test_force(self.print_freq, 'self.print_freq')
+            self.batch_first = batch_first
+            flor.namespace_stack.test_force(self.batch_first,
+                'self.batch_first')
+            self.verbose = verbose
+            flor.namespace_stack.test_force(self.verbose, 'self.verbose')
+            self.loss = None
+            flor.namespace_stack.test_force(self.loss, 'self.loss')
+            self.translator = translator
+            flor.namespace_stack.test_force(self.translator, 'self.translator')
+            self.intra_epoch_eval = intra_epoch_eval
+            flor.namespace_stack.test_force(self.intra_epoch_eval,
+                'self.intra_epoch_eval')
+            self.iter_size = iter_size
+            flor.namespace_stack.test_force(self.iter_size, 'self.iter_size')
+            if cuda:
+                self.model = self.model.cuda()
+                flor.namespace_stack.test_force(self.model, 'self.model')
+                self.criterion = self.criterion.cuda()
+                flor.namespace_stack.test_force(self.criterion,
+                    'self.criterion')
+            if math == 'fp16':
+                self.model = self.model.half()
+                flor.namespace_stack.test_force(self.model, 'self.model')
+            if distributed:
+                self.model = DDP(self.model)
+                flor.namespace_stack.test_force(self.model, 'self.model')
+            if math == 'fp16':
+                self.fp_optimizer = Fp16Optimizer(self.model, grad_clip)
+                flor.namespace_stack.test_force(self.fp_optimizer,
+                    'self.fp_optimizer')
+                params = self.fp_optimizer.fp32_params
+                flor.namespace_stack.test_force(params, 'params')
+            elif math == 'fp32':
+                self.fp_optimizer = Fp32Optimizer(self.model, grad_clip)
+                flor.namespace_stack.test_force(self.fp_optimizer,
+                    'self.fp_optimizer')
+                params = self.model.parameters()
+                flor.namespace_stack.test_force(params, 'params')
+            opt_name = opt_config.pop('optimizer')
+            flor.namespace_stack.test_force(opt_name, 'opt_name')
+            self.optimizer = torch.optim.__dict__[opt_name](params, **
+                opt_config)
+            flor.namespace_stack.test_force(self.optimizer, 'self.optimizer')
+            logging.info(f'Using optimizer: {self.optimizer}')
+            gnmt_print(key=mlperf_log.OPT_NAME, value=mlperf_log.ADAM, sync
+                =False)
+            gnmt_print(key=mlperf_log.OPT_LR, value=opt_config['lr'], sync=
+                False)
+            gnmt_print(key=mlperf_log.OPT_HP_ADAM_BETA1, value=self.
+                optimizer.defaults['betas'][0], sync=False)
+            gnmt_print(key=mlperf_log.OPT_HP_ADAM_BETA2, value=self.
+                optimizer.defaults['betas'][1], sync=False)
+            gnmt_print(key=mlperf_log.OPT_HP_ADAM_EPSILON, value=self.
+                optimizer.defaults['eps'], sync=False)
+            self.scheduler = WarmupMultiStepLR(self.optimizer,
+                train_iterations, **scheduler_config)
+            flor.namespace_stack.test_force(self.scheduler, 'self.scheduler')
+        finally:
+            flor.namespace_stack.pop()
 
     def iterate(self, src, tgt, update=True, training=True):
-        """
+        try:
+            flor.namespace_stack.new()
+            """
         Performs one iteration of the training/validation.
 
         :param src: batch of examples from the source language
@@ -134,227 +159,326 @@ class Seq2SeqTrainer:
         :param update: if True: optimizer does update of the weights
         :param training: if True: executes optimizer
         """
-        src, src_length = src
-        tgt, tgt_length = tgt
-        src_length = torch.LongTensor(src_length)
-        tgt_length = torch.LongTensor(tgt_length)
-
-        num_toks = {}
-        num_toks['tgt'] = int(sum(tgt_length - 1))
-        num_toks['src'] = int(sum(src_length))
-
-        if self.cuda:
-            src = src.cuda()
-            src_length = src_length.cuda()
-            tgt = tgt.cuda()
-
-        if self.batch_first:
-            output = self.model(src, src_length, tgt[:, :-1])
-            tgt_labels = tgt[:, 1:]
-            T, B = output.size(1), output.size(0)
-        else:
-            output = self.model(src, src_length, tgt[:-1])
-            tgt_labels = tgt[1:]
-            T, B = output.size(0), output.size(1)
-
-        loss = self.criterion(output.view(T * B, -1),
-                              tgt_labels.contiguous().view(-1))
-
-        loss_per_batch = loss.item()
-        loss /= (B * self.iter_size)
-
-        if training:
-            self.fp_optimizer.step(loss, self.optimizer, self.scheduler,
-                                   update)
-
-        loss_per_token = loss_per_batch / num_toks['tgt']
-        loss_per_sentence = loss_per_batch / B
-
-        return loss_per_token, loss_per_sentence, num_toks
+            src, src_length = src
+            flor.namespace_stack.test_force(src, 'src')
+            flor.namespace_stack.test_force(src_length, 'src_length')
+            tgt, tgt_length = tgt
+            flor.namespace_stack.test_force(tgt, 'tgt')
+            flor.namespace_stack.test_force(tgt_length, 'tgt_length')
+            src_length = torch.LongTensor(src_length)
+            flor.namespace_stack.test_force(src_length, 'src_length')
+            tgt_length = torch.LongTensor(tgt_length)
+            flor.namespace_stack.test_force(tgt_length, 'tgt_length')
+            num_toks = {}
+            flor.namespace_stack.test_force(num_toks, 'num_toks')
+            num_toks['tgt'] = int(sum(tgt_length - 1))
+            num_toks['src'] = int(sum(src_length))
+            if self.cuda:
+                src = src.cuda()
+                flor.namespace_stack.test_force(src, 'src')
+                src_length = src_length.cuda()
+                flor.namespace_stack.test_force(src_length, 'src_length')
+                tgt = tgt.cuda()
+                flor.namespace_stack.test_force(tgt, 'tgt')
+            if self.batch_first:
+                output = self.model(src, src_length, tgt[:, :-1])
+                flor.namespace_stack.test_force(output, 'output')
+                tgt_labels = tgt[:, 1:]
+                flor.namespace_stack.test_force(tgt_labels, 'tgt_labels')
+                T, B = output.size(1), output.size(0)
+                flor.namespace_stack.test_force(T, 'T')
+                flor.namespace_stack.test_force(B, 'B')
+            else:
+                output = self.model(src, src_length, tgt[:-1])
+                flor.namespace_stack.test_force(output, 'output')
+                tgt_labels = tgt[1:]
+                flor.namespace_stack.test_force(tgt_labels, 'tgt_labels')
+                T, B = output.size(0), output.size(1)
+                flor.namespace_stack.test_force(T, 'T')
+                flor.namespace_stack.test_force(B, 'B')
+            loss = self.criterion(output.view(T * B, -1), tgt_labels.
+                contiguous().view(-1))
+            flor.namespace_stack.test_force(loss, 'loss')
+            loss_per_batch = loss.item()
+            flor.namespace_stack.test_force(loss_per_batch, 'loss_per_batch')
+            loss /= B * self.iter_size
+            if training:
+                self.fp_optimizer.step(loss, self.optimizer, self.scheduler,
+                    update)
+            loss_per_token = loss_per_batch / num_toks['tgt']
+            flor.namespace_stack.test_force(loss_per_token, 'loss_per_token')
+            loss_per_sentence = loss_per_batch / B
+            flor.namespace_stack.test_force(loss_per_sentence,
+                'loss_per_sentence')
+            return loss_per_token, loss_per_sentence, num_toks
+        finally:
+            flor.namespace_stack.pop()
 
     def feed_data(self, data_loader, training=True):
-        """
+        try:
+            flor.namespace_stack.new()
+            """
         Runs training or validation on batches from data_loader.
 
         :param data_loader: data loader
         :param training: if True runs training else runs validation
         """
-        if training:
-            assert self.optimizer is not None
-            eval_fractions = np.linspace(0, 1, self.intra_epoch_eval+2)[1:-1]
-            iters_with_update = len(data_loader) // self.iter_size
-            eval_iters = (eval_fractions * iters_with_update).astype(int)
-            eval_iters = eval_iters * self.iter_size
-            eval_iters = set(eval_iters)
-
-        batch_time = AverageMeter()
-        data_time = AverageMeter()
-        losses_per_token = AverageMeter(skip_first=False)
-        losses_per_sentence = AverageMeter(skip_first=False)
-
-        tot_tok_time = AverageMeter()
-        src_tok_time = AverageMeter()
-        tgt_tok_time = AverageMeter()
-
-        batch_size = data_loader.batch_size
-
-        end = time.time()
-        for i, (src, tgt) in enumerate(data_loader):
-            self.save_counter += 1
-            # measure data loading time
-            data_time.update(time.time() - end)
-
-            update = False
-            if i % self.iter_size == self.iter_size - 1:
-                update = True
-
-            # do a train/evaluate iteration
-            stats = self.iterate(src, tgt, update, training=training)
-            loss_per_token, loss_per_sentence, num_toks = stats
-
-            # measure accuracy and record loss
-            losses_per_token.update(loss_per_token, num_toks['tgt'])
-            losses_per_sentence.update(loss_per_sentence, batch_size)
-
-            # measure elapsed time
-            elapsed = time.time() - end
-            batch_time.update(elapsed)
-            src_tok_time.update(num_toks['src'] / elapsed)
-            tgt_tok_time.update(num_toks['tgt'] / elapsed)
-            tot_num_toks = num_toks['tgt'] + num_toks['src']
-            tot_tok_time.update(tot_num_toks / elapsed)
-            self.loss = losses_per_token.avg
-
-            if training and i in eval_iters:
-                test_bleu, _ = self.translator.run(calc_bleu=True,
-                                                   epoch=self.epoch,
-                                                   iteration=i)
-
-                log = []
-                log += [f'TRAIN [{self.epoch}][{i}/{len(data_loader)}]']
-                log += [f'BLEU: {test_bleu:.2f}']
-                log = '\t'.join(log)
-                logging.info(log)
-
-                self.model.train()
-                self.preallocate(data_loader, training=True)
-
-            if i % self.print_freq == 0:
-                phase = 'TRAIN' if training else 'VALIDATION'
-                log = []
-                log += [f'{phase} [{self.epoch}][{i}/{len(data_loader)}]']
-                log += [f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})']
-                log += [f'Data {data_time.val:.2e} ({data_time.avg:.2e})']
-                log += [f'Tok/s {tot_tok_time.val:.0f} ({tot_tok_time.avg:.0f})']
-                if self.verbose:
-                    log += [f'Src tok/s {src_tok_time.val:.0f} ({src_tok_time.avg:.0f})']
-                    log += [f'Tgt tok/s {tgt_tok_time.val:.0f} ({tgt_tok_time.avg:.0f})']
-                    log += [f'Loss/sentence {losses_per_sentence.val:.1f} ({losses_per_sentence.avg:.1f})']
-                log += [f'Loss/tok {losses_per_token.val:.4f} ({losses_per_token.avg:.4f})']
-                if training:
-                    lr = self.optimizer.param_groups[0]['lr']
-                    log += [f'LR {lr:.3e}']
-                log = '\t'.join(log)
-                logging.info(log)
-
-            save_chkpt = (self.save_counter % self.save_freq) == (self.save_freq - 1)
-            if training and save_chkpt:
-                self.save_counter = 0
-                self.save_info['iteration'] = i
-                identifier = next(self.checkpoint_counter, -1)
-                if identifier != -1:
-                    with sync_workers() as rank:
-                        if rank == 0:
-                            self.save(identifier=identifier)
-
+            if training:
+                assert self.optimizer is not None
+                eval_fractions = np.linspace(0, 1, self.intra_epoch_eval + 2)[
+                    1:-1]
+                flor.namespace_stack.test_force(eval_fractions,
+                    'eval_fractions')
+                iters_with_update = len(data_loader) // self.iter_size
+                flor.namespace_stack.test_force(iters_with_update,
+                    'iters_with_update')
+                eval_iters = (eval_fractions * iters_with_update).astype(int)
+                flor.namespace_stack.test_force(eval_iters, 'eval_iters')
+                eval_iters = eval_iters * self.iter_size
+                flor.namespace_stack.test_force(eval_iters, 'eval_iters')
+                eval_iters = set(eval_iters)
+                flor.namespace_stack.test_force(eval_iters, 'eval_iters')
+            batch_time = AverageMeter()
+            flor.namespace_stack.test_force(batch_time, 'batch_time')
+            data_time = AverageMeter()
+            flor.namespace_stack.test_force(data_time, 'data_time')
+            losses_per_token = AverageMeter(skip_first=False)
+            flor.namespace_stack.test_force(losses_per_token,
+                'losses_per_token')
+            losses_per_sentence = AverageMeter(skip_first=False)
+            flor.namespace_stack.test_force(losses_per_sentence,
+                'losses_per_sentence')
+            tot_tok_time = AverageMeter()
+            flor.namespace_stack.test_force(tot_tok_time, 'tot_tok_time')
+            src_tok_time = AverageMeter()
+            flor.namespace_stack.test_force(src_tok_time, 'src_tok_time')
+            tgt_tok_time = AverageMeter()
+            flor.namespace_stack.test_force(tgt_tok_time, 'tgt_tok_time')
+            batch_size = data_loader.batch_size
+            flor.namespace_stack.test_force(batch_size, 'batch_size')
             end = time.time()
-
-        tot_tok_time.reduce('sum')
-        losses_per_token.reduce('mean')
-
-        return losses_per_token.avg, tot_tok_time.avg
+            flor.namespace_stack.test_force(end, 'end')
+            flor.skip_stack.new(0)
+            if flor.skip_stack.peek().should_execute(not flor.SKIP):
+                for i, (src, tgt) in enumerate(data_loader):
+                    self.save_counter += 1
+                    data_time.update(time.time() - end)
+                    update = False
+                    flor.namespace_stack.test_force(update, 'update')
+                    if i % self.iter_size == self.iter_size - 1:
+                        update = True
+                        flor.namespace_stack.test_force(update, 'update')
+                    stats = self.iterate(src, tgt, update, training=training)
+                    flor.namespace_stack.test_force(stats, 'stats')
+                    loss_per_token, loss_per_sentence, num_toks = stats
+                    flor.namespace_stack.test_force(loss_per_token,
+                        'loss_per_token')
+                    flor.namespace_stack.test_force(loss_per_sentence,
+                        'loss_per_sentence')
+                    flor.namespace_stack.test_force(num_toks, 'num_toks')
+                    losses_per_token.update(loss_per_token, num_toks['tgt'])
+                    losses_per_sentence.update(loss_per_sentence, batch_size)
+                    elapsed = time.time() - end
+                    flor.namespace_stack.test_force(elapsed, 'elapsed')
+                    batch_time.update(elapsed)
+                    src_tok_time.update(num_toks['src'] / elapsed)
+                    tgt_tok_time.update(num_toks['tgt'] / elapsed)
+                    tot_num_toks = num_toks['tgt'] + num_toks['src']
+                    flor.namespace_stack.test_force(tot_num_toks,
+                        'tot_num_toks')
+                    tot_tok_time.update(tot_num_toks / elapsed)
+                    self.loss = losses_per_token.avg
+                    flor.namespace_stack.test_force(self.loss, 'self.loss')
+                    if training and i in eval_iters:
+                        test_bleu, _ = self.translator.run(calc_bleu=True,
+                            epoch=self.epoch, iteration=i)
+                        flor.namespace_stack.test_force(test_bleu, 'test_bleu')
+                        flor.namespace_stack.test_force(_, '_')
+                        log = []
+                        flor.namespace_stack.test_force(log, 'log')
+                        log += [f'TRAIN [{self.epoch}][{i}/{len(data_loader)}]'
+                            ]
+                        log += [f'BLEU: {test_bleu:.2f}']
+                        log = '\t'.join(log)
+                        flor.namespace_stack.test_force(log, 'log')
+                        logging.info(log)
+                        self.model.train()
+                        self.preallocate(data_loader, training=True)
+                    if i % self.print_freq == 0:
+                        phase = 'TRAIN' if training else 'VALIDATION'
+                        flor.namespace_stack.test_force(phase, 'phase')
+                        log = []
+                        flor.namespace_stack.test_force(log, 'log')
+                        log += [
+                            f'{phase} [{self.epoch}][{i}/{len(data_loader)}]']
+                        log += [
+                            f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})'
+                            ]
+                        log += [
+                            f'Data {data_time.val:.2e} ({data_time.avg:.2e})']
+                        log += [
+                            f'Tok/s {tot_tok_time.val:.0f} ({tot_tok_time.avg:.0f})'
+                            ]
+                        if self.verbose:
+                            log += [
+                                f'Src tok/s {src_tok_time.val:.0f} ({src_tok_time.avg:.0f})'
+                                ]
+                            log += [
+                                f'Tgt tok/s {tgt_tok_time.val:.0f} ({tgt_tok_time.avg:.0f})'
+                                ]
+                            log += [
+                                f'Loss/sentence {losses_per_sentence.val:.1f} ({losses_per_sentence.avg:.1f})'
+                                ]
+                        log += [
+                            f'Loss/tok {losses_per_token.val:.4f} ({losses_per_token.avg:.4f})'
+                            ]
+                        if training:
+                            lr = self.optimizer.param_groups[0]['lr']
+                            flor.namespace_stack.test_force(lr, 'lr')
+                            log += [f'LR {lr:.3e}']
+                        log = '\t'.join(log)
+                        flor.namespace_stack.test_force(log, 'log')
+                        logging.info(log)
+                    save_chkpt = (self.save_counter % self.save_freq == 
+                        self.save_freq - 1)
+                    flor.namespace_stack.test_force(save_chkpt, 'save_chkpt')
+                    if training and save_chkpt:
+                        self.save_counter = 0
+                        flor.namespace_stack.test_force(self.save_counter,
+                            'self.save_counter')
+                        self.save_info['iteration'] = i
+                        identifier = next(self.checkpoint_counter, -1)
+                        flor.namespace_stack.test_force(identifier,
+                            'identifier')
+                        if identifier != -1:
+                            with sync_workers() as rank:
+                                if rank == 0:
+                                    self.save(identifier=identifier)
+                    end = time.time()
+                    flor.namespace_stack.test_force(end, 'end')
+            _, _, _, _, _, _, _, _, end, _, _ = flor.skip_stack.pop(
+                ).proc_side_effects(self, batch_time, data_time,
+                losses_per_token, losses_per_sentence, tot_tok_time,
+                src_tok_time, tgt_tok_time, end, time, logging)
+            tot_tok_time.reduce('sum')
+            losses_per_token.reduce('mean')
+            return losses_per_token.avg, tot_tok_time.avg
+        finally:
+            flor.namespace_stack.pop()
 
     def preallocate(self, data_loader, training):
-        """
+        try:
+            flor.namespace_stack.new()
+            """
         Generates maximum sequence length batch and runs forward and backward
         pass without updating model parameters.
 
         :param data_loader: data loader
         :param training: if True preallocates memory for backward pass
         """
-        batch_size = data_loader.batch_size
-        max_len = data_loader.dataset.max_len
-
-        src_length = [max_len] * batch_size
-        tgt_length = [max_len] * batch_size
-
-        if self.batch_first:
-            shape = (batch_size, max_len)
-        else:
-            shape = (max_len, batch_size)
-
-        src = torch.full(shape, 4, dtype=torch.int64)
-        tgt = torch.full(shape, 4, dtype=torch.int64)
-        src = src, src_length
-        tgt = tgt, tgt_length
-        self.iterate(src, tgt, update=False, training=training)
-        self.model.zero_grad()
+            batch_size = data_loader.batch_size
+            flor.namespace_stack.test_force(batch_size, 'batch_size')
+            max_len = data_loader.dataset.max_len
+            flor.namespace_stack.test_force(max_len, 'max_len')
+            src_length = [max_len] * batch_size
+            flor.namespace_stack.test_force(src_length, 'src_length')
+            tgt_length = [max_len] * batch_size
+            flor.namespace_stack.test_force(tgt_length, 'tgt_length')
+            if self.batch_first:
+                shape = batch_size, max_len
+                flor.namespace_stack.test_force(shape, 'shape')
+            else:
+                shape = max_len, batch_size
+                flor.namespace_stack.test_force(shape, 'shape')
+            src = torch.full(shape, 4, dtype=torch.int64)
+            flor.namespace_stack.test_force(src, 'src')
+            tgt = torch.full(shape, 4, dtype=torch.int64)
+            flor.namespace_stack.test_force(tgt, 'tgt')
+            src = src, src_length
+            flor.namespace_stack.test_force(src, 'src')
+            tgt = tgt, tgt_length
+            flor.namespace_stack.test_force(tgt, 'tgt')
+            self.iterate(src, tgt, update=False, training=training)
+            self.model.zero_grad()
+        finally:
+            flor.namespace_stack.pop()
 
     def optimize(self, data_loader):
-        """
+        try:
+            flor.namespace_stack.new()
+            """
         Sets model in training mode, preallocates memory and runs training on
         data provided by data_loader.
 
         :param data_loader: data loader
         """
-        torch.set_grad_enabled(True)
-        self.model.train()
-        torch.cuda.empty_cache()
-        self.preallocate(data_loader, training=True)
-        output = self.feed_data(data_loader, training=True)
-        self.model.zero_grad()
-        torch.cuda.empty_cache()
-        return output
+            torch.set_grad_enabled(True)
+            self.model.train()
+            torch.cuda.empty_cache()
+            self.preallocate(data_loader, training=True)
+            output = self.feed_data(data_loader, training=True)
+            flor.namespace_stack.test_force(output, 'output')
+            self.model.zero_grad()
+            torch.cuda.empty_cache()
+            return output
+        finally:
+            flor.namespace_stack.pop()
 
     def evaluate(self, data_loader):
-        """
+        try:
+            flor.namespace_stack.new()
+            """
         Sets model in eval mode, disables gradients, preallocates memory and
         runs validation on data provided by data_loader.
 
         :param data_loader: data loader
         """
-        torch.set_grad_enabled(False)
-        self.model.eval()
-        torch.cuda.empty_cache()
-        self.preallocate(data_loader, training=False)
-        output = self.feed_data(data_loader, training=False)
-        self.model.zero_grad()
-        torch.cuda.empty_cache()
-        return output
+            torch.set_grad_enabled(False)
+            self.model.eval()
+            torch.cuda.empty_cache()
+            self.preallocate(data_loader, training=False)
+            output = self.feed_data(data_loader, training=False)
+            flor.namespace_stack.test_force(output, 'output')
+            self.model.zero_grad()
+            torch.cuda.empty_cache()
+            return output
+        finally:
+            flor.namespace_stack.pop()
 
     def load(self, filename):
-        """
+        try:
+            flor.namespace_stack.new()
+            """
         Loads checkpoint from filename.
 
         :param filename: path to the checkpoint file
         """
-        if os.path.isfile(filename):
-            checkpoint = torch.load(filename, map_location={'cuda:0': 'cpu'})
-            if self.distributed:
-                self.model.module.load_state_dict(checkpoint['state_dict'])
+            if os.path.isfile(filename):
+                checkpoint = torch.load(filename, map_location={'cuda:0':
+                    'cpu'})
+                flor.namespace_stack.test_force(checkpoint, 'checkpoint')
+                if self.distributed:
+                    self.model.module.load_state_dict(checkpoint['state_dict'])
+                else:
+                    self.model.load_state_dict(checkpoint['state_dict'])
+                self.fp_optimizer.initialize_model(self.model)
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+                self.scheduler.load_state_dict(checkpoint['scheduler'])
+                self.epoch = checkpoint['epoch']
+                flor.namespace_stack.test_force(self.epoch, 'self.epoch')
+                self.loss = checkpoint['loss']
+                flor.namespace_stack.test_force(self.loss, 'self.loss')
+                logging.info(
+                    f'Loaded checkpoint {filename} (epoch {self.epoch})')
             else:
-                self.model.load_state_dict(checkpoint['state_dict'])
-            self.fp_optimizer.initialize_model(self.model)
-            self.optimizer.load_state_dict(checkpoint['optimizer'])
-            self.scheduler.load_state_dict(checkpoint['scheduler'])
-            self.epoch = checkpoint['epoch']
-            self.loss = checkpoint['loss']
-            logging.info(f'Loaded checkpoint {filename} (epoch {self.epoch})')
-        else:
-            logging.error(f'Invalid checkpoint: {filename}')
+                logging.error(f'Invalid checkpoint: {filename}')
+        finally:
+            flor.namespace_stack.pop()
 
     def save(self, identifier=None, is_best=False, save_all=False):
-        """
+        try:
+            flor.namespace_stack.new()
+            """
         Stores checkpoint to a file.
 
         :param identifier: identifier for periodic checkpoint
@@ -363,33 +487,38 @@ class Seq2SeqTrainer:
             epoch
         """
 
-        def write_checkpoint(state, filename):
-            filename = os.path.join(self.save_path, filename)
-            logging.info(f'Saving model to {filename}')
-            torch.save(state, filename)
-
-        if self.distributed:
-            model_state = self.model.module.state_dict()
-        else:
-            model_state = self.model.state_dict()
-
-        state = {
-            'epoch': self.epoch,
-            'state_dict': model_state,
-            'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.scheduler.state_dict(),
-            'loss': getattr(self, 'loss', None),
-        }
-        state = dict(list(state.items()) + list(self.save_info.items()))
-
-        if identifier is not None:
-            filename = self.checkpoint_filename % identifier
-            write_checkpoint(state, filename)
-
-        if is_best:
-            filename = 'model_best.pth'
-            write_checkpoint(state, filename)
-
-        if save_all:
-            filename = f'checkpoint_epoch_{self.epoch:03d}.pth'
-            write_checkpoint(state, filename)
+            def write_checkpoint(state, filename):
+                try:
+                    flor.namespace_stack.new()
+                    filename = os.path.join(self.save_path, filename)
+                    flor.namespace_stack.test_force(filename, 'filename')
+                    logging.info(f'Saving model to {filename}')
+                    torch.save(state, filename)
+                finally:
+                    flor.namespace_stack.pop()
+            if self.distributed:
+                model_state = self.model.module.state_dict()
+                flor.namespace_stack.test_force(model_state, 'model_state')
+            else:
+                model_state = self.model.state_dict()
+                flor.namespace_stack.test_force(model_state, 'model_state')
+            state = {'epoch': self.epoch, 'state_dict': model_state,
+                'optimizer': self.optimizer.state_dict(), 'scheduler': self
+                .scheduler.state_dict(), 'loss': getattr(self, 'loss', None)}
+            flor.namespace_stack.test_force(state, 'state')
+            state = dict(list(state.items()) + list(self.save_info.items()))
+            flor.namespace_stack.test_force(state, 'state')
+            if identifier is not None:
+                filename = self.checkpoint_filename % identifier
+                flor.namespace_stack.test_force(filename, 'filename')
+                write_checkpoint(state, filename)
+            if is_best:
+                filename = 'model_best.pth'
+                flor.namespace_stack.test_force(filename, 'filename')
+                write_checkpoint(state, filename)
+            if save_all:
+                filename = f'checkpoint_epoch_{self.epoch:03d}.pth'
+                flor.namespace_stack.test_force(filename, 'filename')
+                write_checkpoint(state, filename)
+        finally:
+            flor.namespace_stack.pop()

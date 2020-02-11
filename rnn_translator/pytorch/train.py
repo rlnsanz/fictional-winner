@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 import flor
 import time
+timer = {}
+
+timer['true_start'] = time.time()
 
 import argparse
 import logging
@@ -117,7 +120,7 @@ def parse_args():
                           help='training iter size, training loop will \
                           accumulate gradients over N iterations and execute \
                           optimizer every N steps')
-    training.add_argument('--epochs', default=8, type=int,
+    training.add_argument('--epochs', default=1, type=int,
                           help='max number of training epochs')
 
     training.add_argument('--grad-clip', default=5.0, type=float,
@@ -467,6 +470,7 @@ def main():
     break_training = False
     test_bleu = None
     gnmt_print(key=mlperf_log.TRAIN_LOOP, sync=True)
+    timer['loop_start'] = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         logging.info(f'Starting epoch {epoch}')
         gnmt_print(key=mlperf_log.TRAIN_EPOCH,
@@ -528,3 +532,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+    end = time.time()
+    print(f"---------------------Total time: {end - timer['true_start']} seconds--------------------------")
+    print(f"---------------------Loop time: {end - timer['loop_start']} seconds--------------------------")
+    if not flor.SKIP:
+        flor.flush()
