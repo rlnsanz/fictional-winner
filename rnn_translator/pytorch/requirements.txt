@@ -1,4 +1,4 @@
 sacrebleu==1.2.10
 git+git://github.com/NVIDIA/apex.git@9041a868a1a253172d94b113a963375b9badd030#egg=apex
 mlperf-compliance==0.0.10
-git+git://github.com/ucbrise/flot.git@det#egg=pyflor
+git+git://github.com/ucbrise/flor.git@det#egg=pyflor
