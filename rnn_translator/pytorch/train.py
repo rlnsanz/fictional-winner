@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+import flor
+import time
+
 import argparse
 import logging
 import os
@@ -99,7 +102,7 @@ def parse_args():
 
     # training
     training = parser.add_argument_group('training setup')
-    training.add_argument('--train-batch-size', default=128, type=int,
+    training.add_argument('--train-batch-size', default=32, type=int,
                           help='training batch size per worker')
     training.add_argument('--train-global-batch-size', default=None, type=int,
                           help='global training batch size, this argument \
@@ -163,7 +166,7 @@ def parse_args():
 
     # validation
     val = parser.add_argument_group('validation setup')
-    val.add_argument('--val-batch-size', default=64, type=int,
+    val.add_argument('--val-batch-size', default=16, type=int,
                      help='batch size for validation')
     val.add_argument('--max-length-val', default=125, type=int,
                      help='maximum sequence length for validation \
@@ -176,7 +179,7 @@ def parse_args():
 
     # test
     test = parser.add_argument_group('test setup')
-    test.add_argument('--test-batch-size', default=128, type=int,
+    test.add_argument('--test-batch-size', default=32, type=int,
                       help='batch size for test')
     test.add_argument('--max-length-test', default=150, type=int,
                       help='maximum sequence length for test \
