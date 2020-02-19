@@ -148,6 +148,21 @@ class Seq2SeqTrainer:
         finally:
             flor.namespace_stack.pop()
 
+    def state_dict(self):
+        d = {}
+        d['model'] = self.model.state_dict()
+        d['optimizer'] = self.optimizer.state_dict()
+        d['scheduler'] = self.scheduler.state_dict()
+        d['loss'] = getattr(self, 'loss', None)
+        return d
+
+    def load_state_dict(self, sd):
+        self.model.load_state_dict(sd['model'])
+        self.fp_optimizer.initialize_model(self.model)
+        self.optimizer.load_state_dict(sd['optimizer'])
+        self.scheduler.load_state_dict(sd['scheduler'])
+        self.loss = sd['loss']
+
     def iterate(self, src, tgt, update=True, training=True):
         try:
             flor.namespace_stack.new()
