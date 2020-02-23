@@ -1,5 +1,6 @@
 __pycache__/
 tags
 /data
+/pytorch/rnn_trans
 /results
 *.log
