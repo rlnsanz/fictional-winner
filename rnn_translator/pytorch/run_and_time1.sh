@@ -16,7 +16,7 @@ seed=${1:-"1"}
 target=24.00
 
 echo "running benchmark"
-./run0.sh $seed $target
+./run1.sh $seed $target
 
 sleep 3
 ret_code=$?; if [[ $ret_code != 0 ]]; then exit $ret_code; fi

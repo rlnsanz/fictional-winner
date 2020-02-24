@@ -275,7 +275,7 @@ def main(partition, device_id):
             'memo': 'blessed.json'
         }
         flor.initialize(**user_settings, predecessor_id=predecessor_epoch)
-        flor.writer.Writer.store_load = flor.writer.Writer.partitioned_store_load[2*predecessor_epoch] + flor.writer.Writer.partitioned_store_load[2*predecessor_epoch + 1]
+        # flor.writer.Writer.store_load = flor.writer.Writer.partitioned_store_load[2*predecessor_epoch] + flor.writer.Writer.partitioned_store_load[2*predecessor_epoch + 1]
 
 
     fprint = flor.utils.fprint(['data', 'flor_output'], device_id)
