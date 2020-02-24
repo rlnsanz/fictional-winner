@@ -585,6 +585,7 @@ if __name__ == '__main__':
         max_len=args.max_length_test,
         sort=True)
 
+
     user_settings = flor.user_settings
     partitions = flor.utils.get_partitions(range(0, 8), 4)
     futures = [main.remote(p, i) for i,p in enumerate(partitions)]
