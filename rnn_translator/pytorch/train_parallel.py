@@ -576,7 +576,7 @@ def main(partition, device_id):
 
 
 if __name__ == '__main__':
-    ray.init(redis_password='.', num_gpus=4)
+    ray.init(redis_password='mlperf_log.RUN_STOP', num_gpus=4)
     user_settings = flor.user_settings
     partitions = flor.utils.get_partitions(range(0, 8), 4)
     futures = [main.remote(p, i) for i,p in enumerate(partitions)]
