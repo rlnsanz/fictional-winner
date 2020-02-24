@@ -29,8 +29,6 @@ from seq2seq.models.gnmt import GNMT
 from seq2seq.train.smoothing import LabelSmoothing
 from seq2seq.utils import gnmt_print
 
-import ray
-
 def parse_args():
     """
     Parse commandline arguments.
@@ -261,7 +259,6 @@ def build_criterion(vocab_size, padding_idx, smoothing):
 
     return criterion
 
-@ray.remote(num_cpus=2, num_gpus=1)
 def main(partition, device_id):
     """
     Launches data-parallel multi-gpu training.
@@ -271,10 +268,93 @@ def main(partition, device_id):
     predecessor_epoch = partition[0] - 1
     if not flor.is_initialized():
         # Ray creates a new instance of the library per worker, so we have to re-init
+        user_settings = {
+            'name': 'rnn_trans',
+            'rd': '/data',
+            'mode': 'reexec',
+            'memo': 'blessed.json'
+        }
         flor.initialize(**user_settings, predecessor_id=predecessor_epoch)
 
     fprint = flor.utils.fprint(['data', 'flor_output'], device_id)
 
+    mlperf_log.ROOT_DIR_GNMT = os.path.dirname(os.path.abspath(__file__))
+    mlperf_log.LOGGER.propagate = False
+
+    args = parse_args()
+    device = utils.set_device(args.cuda, args.local_rank)
+    distributed = utils.init_distributed(args.cuda)
+    # gnmt_print(key=mlperf_log.RUN_START, sync=True)
+    args.rank = utils.get_rank()
+
+    if not args.cudnn:
+        torch.backends.cudnn.enabled = False
+
+    # create directory for results
+    save_path = os.path.join(args.results_dir, args.save)
+    args.save_path = save_path
+    os.makedirs(save_path, exist_ok=True)
+
+    # setup logging
+    log_filename = f'log_rank_{utils.get_rank()}.log'
+    utils.setup_logging(os.path.join(save_path, log_filename))
+
+    if args.env:
+        utils.log_env_info()
+
+    fprint(f'Saving results to: {save_path}')
+    fprint(f'Run arguments: {args}')
+
+    # automatically set train_iter_size based on train_global_batch_size,
+    # world_size and per-worker train_batch_size
+
+    worker_seeds, shuffling_seeds = utils.setup_seeds(args.seed, args.epochs,
+                                                      device)
+    worker_seed = worker_seeds[args.rank]
+    fprint(f'Worker {args.rank} is using worker seed: {worker_seed}')
+    torch.manual_seed(worker_seed)
+
+    # build tokenizer
+    pad_vocab = utils.pad_vocabulary(args.math)
+    tokenizer = Tokenizer(os.path.join(args.dataset_dir, config.VOCAB_FNAME),
+                          pad_vocab)
+
+    # build datasets
+    # gnmt_print(key=mlperf_log.PREPROC_TOKENIZE_TRAINING, sync=False)
+    # gnmt_print(key=mlperf_log.TRAIN_HP_MAX_SEQ_LEN,
+    #            value=args.max_length_train, sync=False)
+
+    train_data = LazyParallelDataset(
+        src_fname=os.path.join(args.dataset_dir, config.SRC_TRAIN_FNAME),
+        tgt_fname=os.path.join(args.dataset_dir, config.TGT_TRAIN_FNAME),
+        tokenizer=tokenizer,
+        min_len=args.min_length_train,
+        max_len=args.max_length_train,
+        sort=False,
+        max_size=args.max_size)
+
+    # gnmt_print(key=mlperf_log.PREPROC_NUM_TRAIN_EXAMPLES,
+    #            value=len(train_data), sync=False)
+
+    val_data = ParallelDataset(
+        src_fname=os.path.join(args.dataset_dir, config.SRC_VAL_FNAME),
+        tgt_fname=os.path.join(args.dataset_dir, config.TGT_VAL_FNAME),
+        tokenizer=tokenizer,
+        min_len=args.min_length_val,
+        max_len=args.max_length_val,
+        sort=True)
+
+    # gnmt_print(key=mlperf_log.PREPROC_TOKENIZE_EVAL, sync=False)
+
+    test_data = TextDataset(
+        src_fname=os.path.join(args.dataset_dir, config.SRC_TEST_FNAME),
+        tokenizer=tokenizer,
+        min_len=args.min_length_test,
+        max_len=args.max_length_test,
+        sort=True)
+
+    # gnmt_print(key=mlperf_log.PREPROC_NUM_EVAL_EXAMPLES,
+    #            value=len(test_data), sync=False)
 
     vocab_size = tokenizer.vocab_size
     # gnmt_print(key=mlperf_log.PREPROC_VOCAB_SIZE,
@@ -309,8 +389,33 @@ def main(partition, device_id):
     num_parameters = sum([l.nelement() for l in model.parameters()])
     fprint(f'Number of parameters: {num_parameters}')
 
+    batching_opt = {'shard_size': args.shard_size,
+                    'num_buckets': args.num_buckets}
+    # get data loaders
+    train_loader = train_data.get_loader(batch_size=args.train_batch_size,
+                                         seeds=shuffling_seeds,
+                                         batch_first=batch_first,
+                                         shuffle=True,
+                                         batching=args.batching,
+                                         batching_opt=batching_opt,
+                                         num_workers=args.train_loader_workers)
 
+    # gnmt_print(key=mlperf_log.INPUT_BATCH_SIZE,
+    #            value=args.train_batch_size * utils.get_world_size(),
+    #            sync=False)
+    # gnmt_print(key=mlperf_log.INPUT_SIZE,
+    #            value=train_loader.sampler.num_samples, sync=False)
 
+    val_loader = val_data.get_loader(batch_size=args.val_batch_size,
+                                     batch_first=batch_first,
+                                     shuffle=False,
+                                     num_workers=args.val_loader_workers)
+
+    test_loader = test_data.get_loader(batch_size=args.test_batch_size,
+                                       batch_first=batch_first,
+                                       shuffle=False,
+                                       pad=True,
+                                       num_workers=args.test_loader_workers)
 
     # gnmt_print(key=mlperf_log.EVAL_SIZE,
     #            value=len(test_loader.dataset), sync=False)
@@ -330,7 +435,7 @@ def main(partition, device_id):
                             save_path=args.save_path)
 
     # create trainer
-    total_train_iters = len(train_loader) // args.train_iter_size * len(partitions)
+    total_train_iters = len(train_loader) // args.train_iter_size * args.epochs
     save_info = {'model_config': model_config, 'config': args, 'tokenizer':
                  tokenizer.get_state()}
     trainer_options = dict(
@@ -372,44 +477,11 @@ def main(partition, device_id):
 
         # evaluate on validation set
         if args.eval:
-            fprint(f'Running validation on dev set')
             val_loss, val_perf = trainer.evaluate(val_loader)
 
-            # remember best prec@1 and save checkpoint
-            # gnmt_print(key=mlperf_log.TRAIN_CHECKPOINT, sync=False)
-            # if args.rank == 0:
-            #     is_best = val_loss < best_loss
-            #     best_loss = min(val_loss, best_loss)
-            #     trainer.save(save_all=args.save_all, is_best=is_best)
-
         if args.eval:
-            # gnmt_print(key=mlperf_log.EVAL_START, value=epoch, sync=True)
             test_bleu, break_training = translator.run(calc_bleu=True,
                                                        epoch=epoch)
-            # gnmt_print(key=mlperf_log.EVAL_ACCURACY,
-            #            value={"epoch": epoch, "value": round(test_bleu, 2)},
-            #            sync=False)
-            # gnmt_print(key=mlperf_log.EVAL_TARGET,
-            #            value=args.target_bleu, sync=False)
-            # gnmt_print(key=mlperf_log.EVAL_STOP, sync=True)
-
-        acc_log = []
-        acc_log += [f'Summary: Epoch: {epoch}']
-        acc_log += [f'Training Loss: {train_loss:.4f}']
-        if args.eval:
-            acc_log += [f'Validation Loss: {val_loss:.4f}']
-            acc_log += [f'Test BLEU: {test_bleu:.2f}']
-
-        perf_log = []
-        perf_log += [f'Performance: Epoch: {epoch}']
-        perf_log += [f'Training: {train_perf:.0f} Tok/s']
-        if args.eval:
-            perf_log += [f'Validation: {val_perf:.0f} Tok/s']
-
-        fprint('\t'.join(acc_log))
-        fprint('\t'.join(perf_log))
-
-        fprint(f'Finished flor initialization iteration')
 
 
     flor.SKIP = False
@@ -473,121 +545,8 @@ def main(partition, device_id):
 
 
 if __name__ == '__main__':
-    ray.init(redis_password='.', num_gpus=4)
-
-    args = parse_args()
-
-    device = utils.set_device(args.cuda, args.local_rank)
-    distributed = utils.init_distributed(args.cuda)
-
-    if not args.cudnn:
-        torch.backends.cudnn.enabled = False
-
-    save_path = os.path.join(args.results_dir, args.save)
-    args.save_path = save_path
-    os.makedirs(save_path, exist_ok=True)
-
-    pad_vocab = utils.pad_vocabulary(args.math)
-    tokenizer = Tokenizer(os.path.join(args.dataset_dir, config.VOCAB_FNAME),
-                          pad_vocab)
-
-    train_data = LazyParallelDataset(
-        src_fname=os.path.join(args.dataset_dir, config.SRC_TRAIN_FNAME),
-        tgt_fname=os.path.join(args.dataset_dir, config.TGT_TRAIN_FNAME),
-        tokenizer=tokenizer,
-        min_len=args.min_length_train,
-        max_len=args.max_length_train,
-        sort=False,
-        max_size=args.max_size)
-
-    # gnmt_print(key=mlperf_log.PREPROC_NUM_TRAIN_EXAMPLES,
-    #            value=len(train_data), sync=False)
-
-    val_data = ParallelDataset(
-        src_fname=os.path.join(args.dataset_dir, config.SRC_VAL_FNAME),
-        tgt_fname=os.path.join(args.dataset_dir, config.TGT_VAL_FNAME),
-        tokenizer=tokenizer,
-        min_len=args.min_length_val,
-        max_len=args.max_length_val,
-        sort=True)
-
-    # gnmt_print(key=mlperf_log.PREPROC_TOKENIZE_EVAL, sync=False)
-
-    test_data = TextDataset(
-        src_fname=os.path.join(args.dataset_dir, config.SRC_TEST_FNAME),
-        tokenizer=tokenizer,
-        min_len=args.min_length_test,
-        max_len=args.max_length_test,
-        sort=True)
-
-    mlperf_log.ROOT_DIR_GNMT = os.path.dirname(os.path.abspath(__file__))
-    mlperf_log.LOGGER.propagate = False
-
-    # gnmt_print(key=mlperf_log.RUN_START, sync=True)
-    args.rank = utils.get_rank()
-
-    # create directory for results
-
-    # setup logging
-    log_filename = f'log_rank_{utils.get_rank()}.log'
-    utils.setup_logging(os.path.join(save_path, log_filename))
-
-    if args.env:
-        utils.log_env_info()
-
-
-
-    # automatically set train_iter_size based on train_global_batch_size,
-    # world_size and per-worker train_batch_size
-
-    worker_seeds, shuffling_seeds = utils.setup_seeds(args.seed, args.epochs,
-                                                      device)
-    worker_seed = worker_seeds[args.rank]
-    torch.manual_seed(worker_seed)
-
-    batching_opt = {'shard_size': args.shard_size,
-                    'num_buckets': args.num_buckets}
-
-    # get data loaders
-    train_loader = train_data.get_loader(batch_size=args.train_batch_size,
-                                         seeds=shuffling_seeds,
-                                         batch_first=False,
-                                         shuffle=True,
-                                         batching=args.batching,
-                                         batching_opt=batching_opt,
-                                         num_workers=args.train_loader_workers)
-
-    # gnmt_print(key=mlperf_log.INPUT_BATCH_SIZE,
-    #            value=args.train_batch_size * utils.get_world_size(),
-    #            sync=False)
-    # gnmt_print(key=mlperf_log.INPUT_SIZE,
-    #            value=train_loader.sampler.num_samples, sync=False)
-
-    val_loader = val_data.get_loader(batch_size=args.val_batch_size,
-                                     batch_first=False,
-                                     shuffle=False,
-                                     num_workers=args.val_loader_workers)
-
-    test_loader = test_data.get_loader(batch_size=args.test_batch_size,
-                                       batch_first=False,
-                                       shuffle=False,
-                                       pad=True,
-                                       num_workers=args.test_loader_workers)
-
-    # build tokenizer
-
-    # build datasets
-    # gnmt_print(key=mlperf_log.PREPROC_TOKENIZE_TRAINING, sync=False)
-    # gnmt_print(key=mlperf_log.TRAIN_HP_MAX_SEQ_LEN,
-    #            value=args.max_length_train, sync=False)
-
-    # gnmt_print(key=mlperf_log.PREPROC_NUM_EVAL_EXAMPLES,
-    #            value=len(test_data), sync=False)
-
-    user_settings = flor.user_settings
     partitions = flor.utils.get_partitions(range(0, 8), 4)
-    futures = [main.remote(p, i) for i,p in enumerate(partitions)]
-    ray.get(futures)
+    main.remote(partitions, 0)
     end = time.time()
     print(f"---------------------Total time: {end - timer['true_start']} seconds--------------------------")
     if not flor.SKIP:
