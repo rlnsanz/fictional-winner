@@ -546,7 +546,7 @@ def main(partition, device_id):
 
 if __name__ == '__main__':
     partitions = flor.utils.get_partitions(range(0, 8), 4)
-    main.remote(partitions, 1)
+    main(partitions[1], 1)
     end = time.time()
     print(f"---------------------Total time: {end - timer['true_start']} seconds--------------------------")
     if not flor.SKIP:
