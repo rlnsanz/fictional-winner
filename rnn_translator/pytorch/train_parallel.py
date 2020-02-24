@@ -275,46 +275,6 @@ def main(partition, device_id):
 
     fprint = flor.utils.fprint(['data', 'flor_output'], device_id)
 
-    mlperf_log.ROOT_DIR_GNMT = os.path.dirname(os.path.abspath(__file__))
-    mlperf_log.LOGGER.propagate = False
-
-
-    # gnmt_print(key=mlperf_log.RUN_START, sync=True)
-    args.rank = utils.get_rank()
-
-    # create directory for results
-
-    # setup logging
-    log_filename = f'log_rank_{utils.get_rank()}.log'
-    utils.setup_logging(os.path.join(save_path, log_filename))
-
-    if args.env:
-        utils.log_env_info()
-
-    fprint(f'Saving results to: {save_path}')
-    fprint(f'Run arguments: {args}')
-
-    # automatically set train_iter_size based on train_global_batch_size,
-    # world_size and per-worker train_batch_size
-
-    worker_seeds, shuffling_seeds = utils.setup_seeds(args.seed, args.epochs,
-                                                      device)
-    worker_seed = worker_seeds[args.rank]
-    fprint(f'Worker {args.rank} is using worker seed: {worker_seed}')
-    torch.manual_seed(worker_seed)
-
-    # build tokenizer
-
-
-    # build datasets
-    # gnmt_print(key=mlperf_log.PREPROC_TOKENIZE_TRAINING, sync=False)
-    # gnmt_print(key=mlperf_log.TRAIN_HP_MAX_SEQ_LEN,
-    #            value=args.max_length_train, sync=False)
-
-
-
-    # gnmt_print(key=mlperf_log.PREPROC_NUM_EVAL_EXAMPLES,
-    #            value=len(test_data), sync=False)
 
     vocab_size = tokenizer.vocab_size
     # gnmt_print(key=mlperf_log.PREPROC_VOCAB_SIZE,
@@ -349,33 +309,8 @@ def main(partition, device_id):
     num_parameters = sum([l.nelement() for l in model.parameters()])
     fprint(f'Number of parameters: {num_parameters}')
 
-    batching_opt = {'shard_size': args.shard_size,
-                    'num_buckets': args.num_buckets}
-    # get data loaders
-    train_loader = train_data.get_loader(batch_size=args.train_batch_size,
-                                         seeds=shuffling_seeds,
-                                         batch_first=batch_first,
-                                         shuffle=True,
-                                         batching=args.batching,
-                                         batching_opt=batching_opt,
-                                         num_workers=args.train_loader_workers)
 
-    # gnmt_print(key=mlperf_log.INPUT_BATCH_SIZE,
-    #            value=args.train_batch_size * utils.get_world_size(),
-    #            sync=False)
-    # gnmt_print(key=mlperf_log.INPUT_SIZE,
-    #            value=train_loader.sampler.num_samples, sync=False)
 
-    val_loader = val_data.get_loader(batch_size=args.val_batch_size,
-                                     batch_first=batch_first,
-                                     shuffle=False,
-                                     num_workers=args.val_loader_workers)
-
-    test_loader = test_data.get_loader(batch_size=args.test_batch_size,
-                                       batch_first=batch_first,
-                                       shuffle=False,
-                                       pad=True,
-                                       num_workers=args.test_loader_workers)
 
     # gnmt_print(key=mlperf_log.EVAL_SIZE,
     #            value=len(test_loader.dataset), sync=False)
@@ -395,7 +330,7 @@ def main(partition, device_id):
                             save_path=args.save_path)
 
     # create trainer
-    total_train_iters = len(train_loader) // args.train_iter_size * args.epochs
+    total_train_iters = len(train_loader) // args.train_iter_size * len(partitions)
     save_info = {'model_config': model_config, 'config': args, 'tokenizer':
                  tokenizer.get_state()}
     trainer_options = dict(
@@ -585,6 +520,69 @@ if __name__ == '__main__':
         max_len=args.max_length_test,
         sort=True)
 
+    mlperf_log.ROOT_DIR_GNMT = os.path.dirname(os.path.abspath(__file__))
+    mlperf_log.LOGGER.propagate = False
+
+    # gnmt_print(key=mlperf_log.RUN_START, sync=True)
+    args.rank = utils.get_rank()
+
+    # create directory for results
+
+    # setup logging
+    log_filename = f'log_rank_{utils.get_rank()}.log'
+    utils.setup_logging(os.path.join(save_path, log_filename))
+
+    if args.env:
+        utils.log_env_info()
+
+
+
+    # automatically set train_iter_size based on train_global_batch_size,
+    # world_size and per-worker train_batch_size
+
+    worker_seeds, shuffling_seeds = utils.setup_seeds(args.seed, args.epochs,
+                                                      device)
+    worker_seed = worker_seeds[args.rank]
+    torch.manual_seed(worker_seed)
+
+    batching_opt = {'shard_size': args.shard_size,
+                    'num_buckets': args.num_buckets}
+
+    # get data loaders
+    train_loader = train_data.get_loader(batch_size=args.train_batch_size,
+                                         seeds=shuffling_seeds,
+                                         batch_first=False,
+                                         shuffle=True,
+                                         batching=args.batching,
+                                         batching_opt=batching_opt,
+                                         num_workers=args.train_loader_workers)
+
+    # gnmt_print(key=mlperf_log.INPUT_BATCH_SIZE,
+    #            value=args.train_batch_size * utils.get_world_size(),
+    #            sync=False)
+    # gnmt_print(key=mlperf_log.INPUT_SIZE,
+    #            value=train_loader.sampler.num_samples, sync=False)
+
+    val_loader = val_data.get_loader(batch_size=args.val_batch_size,
+                                     batch_first=False,
+                                     shuffle=False,
+                                     num_workers=args.val_loader_workers)
+
+    test_loader = test_data.get_loader(batch_size=args.test_batch_size,
+                                       batch_first=False,
+                                       shuffle=False,
+                                       pad=True,
+                                       num_workers=args.test_loader_workers)
+
+    # build tokenizer
+
+    # build datasets
+    # gnmt_print(key=mlperf_log.PREPROC_TOKENIZE_TRAINING, sync=False)
+    # gnmt_print(key=mlperf_log.TRAIN_HP_MAX_SEQ_LEN,
+    #            value=args.max_length_train, sync=False)
+
+    # gnmt_print(key=mlperf_log.PREPROC_NUM_EVAL_EXAMPLES,
+    #            value=len(test_data), sync=False)
 
     user_settings = flor.user_settings
     partitions = flor.utils.get_partitions(range(0, 8), 4)
