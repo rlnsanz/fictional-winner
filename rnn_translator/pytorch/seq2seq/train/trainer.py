@@ -274,7 +274,7 @@ class Seq2SeqTrainer:
             end = time.time()
             flor.namespace_stack.test_force(end, 'end')
             flor.skip_stack.new(0)
-            if flor.skip_stack.peek().should_execute(not flor.SKIP):
+            if flor.skip_stack.peek().should_execute(True):
                 for i, (src, tgt) in enumerate(data_loader):
                     self.save_counter += 1
                     data_time.update(time.time() - end)
