@@ -486,6 +486,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+    end = time.time()
     print(f"---------------------Total time: {end - timer['true_start']} seconds--------------------------")
     print(f"---------------------Loop time: {end - timer['loop_start']} seconds--------------------------")
     if not flor.SKIP:
