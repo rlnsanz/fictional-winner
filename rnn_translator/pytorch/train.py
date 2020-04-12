@@ -427,55 +427,58 @@ def main():
         gnmt_print(key=mlperf_log.TRAIN_LOOP, sync=True)
         timer['loop_start'] = time.time()
         flor.skip_stack.new(0, 0)
-        for epoch in flor.partition(range(args.start_epoch, args.epochs),
-            flor.PID, flor.NPARTS):
-            logging.info(f'Starting epoch {epoch}')
-            gnmt_print(key=mlperf_log.TRAIN_EPOCH, value=epoch, sync=True)
-            train_loader.sampler.set_epoch(epoch)
-            trainer.epoch = epoch
-            flor.namespace_stack.test_force(trainer.epoch, 'trainer.epoch')
-            train_loss, train_perf = trainer.optimize(train_loader)
-            if args.eval:
-                logging.info(f'Running validation on dev set')
-                val_loss, val_perf = trainer.evaluate(val_loader)
-                gnmt_print(key=mlperf_log.TRAIN_CHECKPOINT, sync=False)
+        for flor.PID in flor.sample(range(args.start_epoch, args.epochs),
+            flor.RATE):
+            for epoch in flor.partition(range(args.start_epoch, args.epochs
+                ), flor.PID, flor.NPARTS):
+                logging.info(f'Starting epoch {epoch}')
+                gnmt_print(key=mlperf_log.TRAIN_EPOCH, value=epoch, sync=True)
+                train_loader.sampler.set_epoch(epoch)
+                trainer.epoch = epoch
+                flor.namespace_stack.test_force(trainer.epoch, 'trainer.epoch')
+                train_loss, train_perf = trainer.optimize(train_loader)
+                if args.eval:
+                    logging.info(f'Running validation on dev set')
+                    val_loss, val_perf = trainer.evaluate(val_loader)
+                    gnmt_print(key=mlperf_log.TRAIN_CHECKPOINT, sync=False)
+                    if args.rank == 0:
+                        is_best = val_loss < best_loss
+                        flor.namespace_stack.test_force(is_best, 'is_best')
+                        best_loss = min(val_loss, best_loss)
+                        flor.namespace_stack.test_force(best_loss, 'best_loss')
+                        trainer.save(save_all=args.save_all, is_best=is_best)
+                if args.eval:
+                    gnmt_print(key=mlperf_log.EVAL_START, value=epoch, sync
+                        =True)
+                    test_bleu, break_training = translator.run(calc_bleu=
+                        True, epoch=epoch)
+                    flor.namespace_stack.test_force(test_bleu, 'test_bleu')
+                    flor.namespace_stack.test_force(break_training,
+                        'break_training')
+                    gnmt_print(key=mlperf_log.EVAL_ACCURACY, value={'epoch':
+                        epoch, 'value': round(test_bleu, 2)}, sync=False)
+                    gnmt_print(key=mlperf_log.EVAL_TARGET, value=args.
+                        target_bleu, sync=False)
+                    gnmt_print(key=mlperf_log.EVAL_STOP, sync=True)
+                acc_log = []
+                flor.namespace_stack.test_force(acc_log, 'acc_log')
+                acc_log += [f'Summary: Epoch: {epoch}']
+                acc_log += [f'Training Loss: {train_loss:.4f}']
+                if args.eval:
+                    acc_log += [f'Validation Loss: {val_loss:.4f}']
+                    acc_log += [f'Test BLEU: {test_bleu:.2f}']
+                perf_log = []
+                flor.namespace_stack.test_force(perf_log, 'perf_log')
+                perf_log += [f'Performance: Epoch: {epoch}']
+                perf_log += [f'Training: {train_perf:.0f} Tok/s']
+                if args.eval:
+                    perf_log += [f'Validation: {val_perf:.0f} Tok/s']
                 if args.rank == 0:
-                    is_best = val_loss < best_loss
-                    flor.namespace_stack.test_force(is_best, 'is_best')
-                    best_loss = min(val_loss, best_loss)
-                    flor.namespace_stack.test_force(best_loss, 'best_loss')
-                    trainer.save(save_all=args.save_all, is_best=is_best)
-            if args.eval:
-                gnmt_print(key=mlperf_log.EVAL_START, value=epoch, sync=True)
-                test_bleu, break_training = translator.run(calc_bleu=True,
-                    epoch=epoch)
-                flor.namespace_stack.test_force(test_bleu, 'test_bleu')
-                flor.namespace_stack.test_force(break_training,
-                    'break_training')
-                gnmt_print(key=mlperf_log.EVAL_ACCURACY, value={'epoch':
-                    epoch, 'value': round(test_bleu, 2)}, sync=False)
-                gnmt_print(key=mlperf_log.EVAL_TARGET, value=args.
-                    target_bleu, sync=False)
-                gnmt_print(key=mlperf_log.EVAL_STOP, sync=True)
-            acc_log = []
-            flor.namespace_stack.test_force(acc_log, 'acc_log')
-            acc_log += [f'Summary: Epoch: {epoch}']
-            acc_log += [f'Training Loss: {train_loss:.4f}']
-            if args.eval:
-                acc_log += [f'Validation Loss: {val_loss:.4f}']
-                acc_log += [f'Test BLEU: {test_bleu:.2f}']
-            perf_log = []
-            flor.namespace_stack.test_force(perf_log, 'perf_log')
-            perf_log += [f'Performance: Epoch: {epoch}']
-            perf_log += [f'Training: {train_perf:.0f} Tok/s']
-            if args.eval:
-                perf_log += [f'Validation: {val_perf:.0f} Tok/s']
-            if args.rank == 0:
-                logging.info('\t'.join(acc_log))
-                logging.info('\t'.join(perf_log))
-            logging.info(f'Finished epoch {epoch}')
-            if break_training:
-                break
+                    logging.info('\t'.join(acc_log))
+                    logging.info('\t'.join(perf_log))
+                logging.info(f'Finished epoch {epoch}')
+                if break_training:
+                    break
         flor.skip_stack.pop()
         gnmt_print(key=mlperf_log.RUN_STOP, value={'success': bool(
             break_training)}, sync=True)
@@ -488,10 +491,10 @@ if __name__ == '__main__':
     main()
     end = time.time()
     print(
-        f"---------------------Total time: {end - timer['true_start']} seconds--------------------------"
+        f"---------------------Total time: {(end - timer['true_start'])} seconds--------------------------"
         )
     print(
-        f"---------------------Loop time: {end - timer['loop_start']} seconds--------------------------"
+        f"---------------------Loop time: {(end - timer['loop_start'])} seconds--------------------------"
         )
     if not flor.SKIP:
         flor.flush()
