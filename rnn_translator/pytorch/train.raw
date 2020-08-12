@@ -117,7 +117,7 @@ def parse_args():
                           help='training iter size, training loop will \
                           accumulate gradients over N iterations and execute \
                           optimizer every N steps')
-    training.add_argument('--epochs', default=6, type=int,
+    training.add_argument('--epochs', default=8, type=int,
                           help='max number of training epochs')
 
     training.add_argument('--grad-clip', default=5.0, type=float,
