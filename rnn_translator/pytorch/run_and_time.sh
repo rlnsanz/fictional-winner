@@ -12,11 +12,9 @@ start_fmt=$(date +%Y-%m-%d\ %r)
 echo "STARTING TIMING RUN AT $start_fmt"
 
 # run benchmark
-seed=${1:-"1"}
-target=40.00
 
 echo "running benchmark"
-./run.sh $seed $target
+./run.sh $1 $2
 
 sleep 3
 ret_code=$?; if [[ $ret_code != 0 ]]; then exit $ret_code; fi
