@@ -219,7 +219,7 @@ def parse_args():
 
     # benchmarking
     benchmark = parser.add_argument_group('benchmark setup')
-    benchmark.add_argument('--target-bleu', default=24.0, type=float,
+    benchmark.add_argument('--target-bleu', default=40.0, type=float,
                            help='target accuracy, training will be stopped \
                            when the target is achieved')
 
