@@ -5,7 +5,7 @@ set -e
 DATASET_DIR='/data'
 
 SEED=${1:-"1"}
-TARGET=${2:-"24.00"}
+TARGET=${2:-"40.00"}
 
 # run training
 python3 train.py --flor=name:rnn_trans,mode:reexec,memo:blessed.json,rd:/data,predinit:strong,pid:4,ngpus:6 \
