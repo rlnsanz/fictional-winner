@@ -40,8 +40,10 @@ case ${1:-"base"} in
 esac
 
 # run training
-echo "python3 train.py $MOUD \
+echo $1 
+echo $2
+python3 train.py $MOUD \
   --dataset-dir ${DATASET_DIR} \
   --seed $SEED \
   --save-freq $FREQ \
-  --target-bleu $TARGET"
+  --target-bleu $TARGET
