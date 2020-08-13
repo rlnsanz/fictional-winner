@@ -382,13 +382,13 @@ class Seq2SeqTrainer:
         }
         state = dict(list(state.items()) + list(self.save_info.items()))
 
-        if identifier is not None:
-            filename = self.checkpoint_filename % identifier
-            write_checkpoint(state, filename)
+        # if identifier is not None:
+        #     filename = self.checkpoint_filename % identifier
+        #     write_checkpoint(state, filename)
 
-        if is_best:
-            filename = 'model_best.pth'
-            write_checkpoint(state, filename)
+        # if is_best:
+        #     filename = 'model_best.pth'
+        #     write_checkpoint(state, filename)
 
         if save_all:
             filename = f'checkpoint_epoch_{self.epoch:03d}.pth'

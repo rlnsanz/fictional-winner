@@ -523,14 +523,14 @@ class Seq2SeqTrainer:
             flor.namespace_stack.test_force(state, 'state')
             state = dict(list(state.items()) + list(self.save_info.items()))
             flor.namespace_stack.test_force(state, 'state')
-            if identifier is not None:
-                filename = self.checkpoint_filename % identifier
-                flor.namespace_stack.test_force(filename, 'filename')
-                write_checkpoint(state, filename)
-            if is_best:
-                filename = 'model_best.pth'
-                flor.namespace_stack.test_force(filename, 'filename')
-                write_checkpoint(state, filename)
+            # if identifier is not None:
+            #     filename = self.checkpoint_filename % identifier
+            #     flor.namespace_stack.test_force(filename, 'filename')
+            #     write_checkpoint(state, filename)
+            # if is_best:
+            #     filename = 'model_best.pth'
+            #     flor.namespace_stack.test_force(filename, 'filename')
+            #     write_checkpoint(state, filename)
             if save_all:
                 filename = f'checkpoint_epoch_{self.epoch:03d}.pth'
                 flor.namespace_stack.test_force(filename, 'filename')
