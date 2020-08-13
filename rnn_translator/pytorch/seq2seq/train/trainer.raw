@@ -362,6 +362,8 @@ class Seq2SeqTrainer:
         :param save_all: if True stores checkpoint after completed training
             epoch
         """
+        if not save_all:
+            return
 
         def write_checkpoint(state, filename):
             filename = os.path.join(self.save_path, filename)
