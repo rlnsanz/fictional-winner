@@ -46,4 +46,5 @@ python3 train.py $MOUD \
   --dataset-dir ${DATASET_DIR} \
   --seed $SEED \
   --save-freq $FREQ \
-  --target-bleu $TARGET
+  --target-bleu $TARGET \
+  --results-dir /data/results
