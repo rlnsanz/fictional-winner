@@ -31,7 +31,7 @@ rnn_type      = 'gru' #Type of the RNN. rnn|gru|lstm are supported
 rnn_act_type  = 'tanh' #Type of the activation within RNN. tanh | relu are supported
 
 # Training parameters
-epochs          = 10 # Number of training epochs
+epochs          = 4 # Number of training epochs
 learning_anneal = 1.1 # Annealing applied to learning rate every epoch
 lr              = 0.0001 # initial learning rate
 momentum        = 0.9 # momentum
@@ -39,4 +39,4 @@ max_norm        = 400 # Norm cutoff to prevent explosion of gradients
 l2              = 0 # L2 regularization
 batch_size      = 8 #Batch size for training
 augment         = True # Use random tempo and gain perturbations
-exit_at_acc     = True # Exit at given target accuracy
+exit_at_acc     = False # Exit at given target accuracy

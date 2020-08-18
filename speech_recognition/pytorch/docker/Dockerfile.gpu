@@ -51,7 +51,9 @@ RUN pip3 install h5py \
                 python-Levenshtein \
                 librosa \
                 wget \
-                tensorboardX
+                tensorboardX \
+                git+https://github.com/ucbrise/flor.git@7865197d14695e23ea53c352577c010626c2a455
+
 
 RUN apt-get update && apt-get install --yes --no-install-recommends cmake \
                                                                     sudo

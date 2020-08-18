@@ -3,7 +3,7 @@
 set -e
 
 RANDOM_SEED=1
-TARGET_ACC=23
+TARGET_ACC=40
 
 INIT='strong'
 NGPUS='4'
