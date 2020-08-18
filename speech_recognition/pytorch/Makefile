@@ -4,7 +4,6 @@ CURRDIR := `pwd`
 G ?= 0
 
 all:
-	nvidia-docker build . --rm -f docker/Dockerfile.gpu -t ds2-cuda9cudnn7:gpu
 	NV_GPU=$(G) nvidia-docker run --rm --ipc=host \
               -v  $(CURRDIR)/../:/speech:rw \
               -v /etc/passwd:/etc/passwd:ro \

@@ -76,3 +76,4 @@ RUN git clone --recursive https://github.com/parlance/ctcdecode.git
 RUN cd ctcdecode; pip3 install .
 
 ENV SHELL /bin/bash
+WORKDIR /speech/pytorch
