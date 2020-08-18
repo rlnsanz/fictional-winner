@@ -1,0 +1,359 @@
+import flor
+import time
+start_time = time.time()
+import argparse
+import errno
+import json
+import os
+import time
+import sys
+import numpy as np
+import torch
+from torch.autograd import Variable
+from warpctc_pytorch import CTCLoss
+import torch.nn.functional as F
+sys.path.append('../')
+from data.bucketing_sampler import BucketingSampler, SpectrogramDatasetWithLength
+from data.data_loader import AudioDataLoader, SpectrogramDataset
+from decoder import GreedyDecoder
+from model import DeepSpeech, supported_rnns
+import params
+from eval_model import eval_model
+parser = argparse.ArgumentParser(description='DeepSpeech training')
+flor.namespace_stack.test_force(parser, 'parser')
+parser.add_argument('--checkpoint', dest='checkpoint', action='store_true',
+    help='Enables checkpoint saving of model')
+parser.add_argument('--save_folder', default='models/', help=
+    'Location to save epoch models')
+parser.add_argument('--model_path', default=
+    'models/deepspeech_final.pth.tar', help=
+    'Location to save best validation model')
+parser.add_argument('--continue_from', default='', help=
+    'Continue from checkpoint model')
+parser.add_argument('--seed', default=3735928559, type=int, help='Random Seed')
+parser.add_argument('--acc', default=23.0, type=float, help='Target WER')
+parser.add_argument('--start_epoch', default=-1, type=int, help=
+    'Number of epochs at which to start from')
+
+
+def to_np(x):
+    try:
+        flor.namespace_stack.new()
+        return x.data.cpu().numpy()
+    finally:
+        flor.namespace_stack.pop()
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+
+    def __init__(self):
+        try:
+            flor.namespace_stack.new()
+            self.reset()
+        finally:
+            flor.namespace_stack.pop()
+
+    def reset(self):
+        try:
+            flor.namespace_stack.new()
+            self.val = 0
+            flor.namespace_stack.test_force(self.val, 'self.val')
+            self.avg = 0
+            flor.namespace_stack.test_force(self.avg, 'self.avg')
+            self.sum = 0
+            flor.namespace_stack.test_force(self.sum, 'self.sum')
+            self.count = 0
+            flor.namespace_stack.test_force(self.count, 'self.count')
+        finally:
+            flor.namespace_stack.pop()
+
+    def update(self, val, n=1):
+        try:
+            flor.namespace_stack.new()
+            self.val = val
+            flor.namespace_stack.test_force(self.val, 'self.val')
+            self.sum += val * n
+            self.count += n
+            self.avg = self.sum / self.count
+            flor.namespace_stack.test_force(self.avg, 'self.avg')
+        finally:
+            flor.namespace_stack.pop()
+
+
+def main():
+    try:
+        flor.namespace_stack.new()
+        args = parser.parse_args()
+        flor.namespace_stack.test_force(args, 'args')
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+        if params.rnn_type == 'gru' and params.rnn_act_type != 'tanh':
+            print(
+                'ERROR: GRU does not currently support activations other than tanh'
+                )
+            sys.exit()
+        if params.rnn_type == 'rnn' and params.rnn_act_type != 'relu':
+            print('ERROR: We should be using ReLU RNNs')
+            sys.exit()
+        print('=======================================================')
+        flor.skip_stack.new(0, 0)
+        for arg in vars(args):
+            print('***%s = %s ' % (arg.ljust(25), getattr(args, arg)))
+        flor.skip_stack.pop()
+        print('=======================================================')
+        save_folder = args.save_folder
+        flor.namespace_stack.test_force(save_folder, 'save_folder')
+        loss_results, cer_results, wer_results = torch.Tensor(params.epochs
+            ), torch.Tensor(params.epochs), torch.Tensor(params.epochs)
+        flor.namespace_stack.test_force(loss_results, 'loss_results')
+        flor.namespace_stack.test_force(cer_results, 'cer_results')
+        flor.namespace_stack.test_force(wer_results, 'wer_results')
+        best_wer = None
+        flor.namespace_stack.test_force(best_wer, 'best_wer')
+        try:
+            os.makedirs(save_folder)
+        except OSError as e:
+            if e.errno == errno.EEXIST:
+                print('Directory already exists.')
+            else:
+                raise
+        criterion = CTCLoss()
+        flor.namespace_stack.test_force(criterion, 'criterion')
+        with open(params.labels_path) as label_file:
+            labels = str(''.join(json.load(label_file)))
+            flor.namespace_stack.test_force(labels, 'labels')
+        audio_conf = dict(sample_rate=params.sample_rate, window_size=
+            params.window_size, window_stride=params.window_stride, window=
+            params.window, noise_dir=params.noise_dir, noise_prob=params.
+            noise_prob, noise_levels=(params.noise_min, params.noise_max))
+        flor.namespace_stack.test_force(audio_conf, 'audio_conf')
+        train_dataset = SpectrogramDataset(audio_conf=audio_conf,
+            manifest_filepath=params.train_manifest, labels=labels,
+            normalize=True, augment=params.augment)
+        flor.namespace_stack.test_force(train_dataset, 'train_dataset')
+        test_dataset = SpectrogramDataset(audio_conf=audio_conf,
+            manifest_filepath=params.val_manifest, labels=labels, normalize
+            =True, augment=False)
+        flor.namespace_stack.test_force(test_dataset, 'test_dataset')
+        train_loader = AudioDataLoader(train_dataset, batch_size=params.
+            batch_size, num_workers=1)
+        flor.namespace_stack.test_force(train_loader, 'train_loader')
+        test_loader = AudioDataLoader(test_dataset, batch_size=params.
+            batch_size, num_workers=1)
+        flor.namespace_stack.test_force(test_loader, 'test_loader')
+        rnn_type = params.rnn_type.lower()
+        flor.namespace_stack.test_force(rnn_type, 'rnn_type')
+        assert rnn_type in supported_rnns, 'rnn_type should be either lstm, rnn or gru'
+        model = DeepSpeech(rnn_hidden_size=params.hidden_size, nb_layers=
+            params.hidden_layers, labels=labels, rnn_type=supported_rnns[
+            rnn_type], audio_conf=audio_conf, bidirectional=False,
+            rnn_activation=params.rnn_act_type, bias=params.bias)
+        flor.namespace_stack.test_force(model, 'model')
+        parameters = model.parameters()
+        flor.namespace_stack.test_force(parameters, 'parameters')
+        optimizer = torch.optim.SGD(parameters, lr=params.lr, momentum=
+            params.momentum, nesterov=True, weight_decay=params.l2)
+        flor.namespace_stack.test_force(optimizer, 'optimizer')
+        decoder = GreedyDecoder(labels)
+        flor.namespace_stack.test_force(decoder, 'decoder')
+        if args.continue_from:
+            print('Loading checkpoint model %s' % args.continue_from)
+            package = torch.load(args.continue_from)
+            flor.namespace_stack.test_force(package, 'package')
+            model.load_state_dict(package['state_dict'])
+            optimizer.load_state_dict(package['optim_dict'])
+            start_epoch = int(package.get('epoch', 1)) - 1
+            flor.namespace_stack.test_force(start_epoch, 'start_epoch')
+            start_iter = package.get('iteration', None)
+            flor.namespace_stack.test_force(start_iter, 'start_iter')
+            if start_iter is None:
+                start_epoch += 1
+                start_iter = 0
+                flor.namespace_stack.test_force(start_iter, 'start_iter')
+            else:
+                start_iter += 1
+            avg_loss = int(package.get('avg_loss', 0))
+            flor.namespace_stack.test_force(avg_loss, 'avg_loss')
+            if args.start_epoch != -1:
+                start_epoch = args.start_epoch
+                flor.namespace_stack.test_force(start_epoch, 'start_epoch')
+            loss_results[:start_epoch], cer_results[:start_epoch], wer_results[
+                :start_epoch] = package['loss_results'][:start_epoch], package[
+                'cer_results'][:start_epoch], package['wer_results'][:
+                start_epoch]
+            print(loss_results)
+            epoch = start_epoch
+            flor.namespace_stack.test_force(epoch, 'epoch')
+        else:
+            avg_loss = 0
+            flor.namespace_stack.test_force(avg_loss, 'avg_loss')
+            start_epoch = 0
+            flor.namespace_stack.test_force(start_epoch, 'start_epoch')
+            start_iter = 0
+            flor.namespace_stack.test_force(start_iter, 'start_iter')
+            avg_training_loss = 0
+            flor.namespace_stack.test_force(avg_training_loss,
+                'avg_training_loss')
+        if params.cuda:
+            model = torch.nn.DataParallel(model).cuda()
+            flor.namespace_stack.test_force(model, 'model')
+        print(model)
+        print('Number of parameters: %d' % DeepSpeech.get_param_size(model))
+        batch_time = AverageMeter()
+        flor.namespace_stack.test_force(batch_time, 'batch_time')
+        data_time = AverageMeter()
+        flor.namespace_stack.test_force(data_time, 'data_time')
+        losses = AverageMeter()
+        flor.namespace_stack.test_force(losses, 'losses')
+        ctc_time = AverageMeter()
+        flor.namespace_stack.test_force(ctc_time, 'ctc_time')
+        flor.skip_stack.new(2, 0)
+        for epoch in range(start_epoch, params.epochs):
+            model.train()
+            end = time.time()
+            flor.namespace_stack.test_force(end, 'end')
+            flor.skip_stack.new(1)
+            if flor.skip_stack.peek().should_execute(not flor.SKIP):
+                for i, data in enumerate(train_loader, start=start_iter):
+                    if i == len(train_loader):
+                        break
+                    inputs, targets, input_percentages, target_sizes = data
+                    flor.namespace_stack.test_force(inputs, 'inputs')
+                    flor.namespace_stack.test_force(targets, 'targets')
+                    flor.namespace_stack.test_force(input_percentages,
+                        'input_percentages')
+                    flor.namespace_stack.test_force(target_sizes,
+                        'target_sizes')
+                    data_time.update(time.time() - end)
+                    inputs = Variable(inputs, requires_grad=False)
+                    flor.namespace_stack.test_force(inputs, 'inputs')
+                    target_sizes = Variable(target_sizes, requires_grad
+                        =False)
+                    flor.namespace_stack.test_force(target_sizes,
+                        'target_sizes')
+                    targets = Variable(targets, requires_grad=False)
+                    flor.namespace_stack.test_force(targets, 'targets')
+                    if params.cuda:
+                        inputs = inputs.cuda()
+                        flor.namespace_stack.test_force(inputs, 'inputs')
+                    out = model(inputs)
+                    flor.namespace_stack.test_force(out, 'out')
+                    out = out.transpose(0, 1)
+                    flor.namespace_stack.test_force(out, 'out')
+                    seq_length = out.size(0)
+                    flor.namespace_stack.test_force(seq_length,
+                        'seq_length')
+                    sizes = Variable(input_percentages.mul_(int(
+                        seq_length)).int(), requires_grad=False)
+                    flor.namespace_stack.test_force(sizes, 'sizes')
+                    ctc_start_time = time.time()
+                    flor.namespace_stack.test_force(ctc_start_time,
+                        'ctc_start_time')
+                    loss = criterion(out, targets, sizes, target_sizes)
+                    flor.namespace_stack.test_force(loss, 'loss')
+                    ctc_time.update(time.time() - ctc_start_time)
+                    loss = loss / inputs.size(0)
+                    flor.namespace_stack.test_force(loss, 'loss')
+                    loss_sum = loss.data.sum()
+                    flor.namespace_stack.test_force(loss_sum, 'loss_sum')
+                    inf = float('inf')
+                    flor.namespace_stack.test_force(inf, 'inf')
+                    if loss_sum == inf or loss_sum == -inf:
+                        print(
+                            'WARNING: received an inf loss, setting loss value to 0'
+                            )
+                        loss_value = 0
+                        flor.namespace_stack.test_force(loss_value,
+                            'loss_value')
+                    else:
+                        loss_value = loss.data[0]
+                        flor.namespace_stack.test_force(loss_value,
+                            'loss_value')
+                    avg_loss += loss_value
+                    losses.update(loss_value, inputs.size(0))
+                    optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm(model.parameters(),
+                        params.max_norm)
+                    optimizer.step()
+                    if params.cuda:
+                        torch.cuda.synchronize()
+                    batch_time.update(time.time() - end)
+                    end = time.time()
+                    flor.namespace_stack.test_force(end, 'end')
+                    print(
+                        'Epoch: [{0}][{1}/{2}]\tTime {batch_time.val:.3f} ({batch_time.avg:.3f})\tData {data_time.val:.3f} ({data_time.avg:.3f})\tCTC Time {ctc_time.val:.3f} ({ctc_time.avg:.3f})\tLoss {loss.val:.4f} ({loss.avg:.4f})\t'
+                        .format(epoch + 1, i + 1, len(train_loader),
+                        batch_time=batch_time, data_time=data_time,
+                        ctc_time=ctc_time, loss=losses))
+                    del loss
+                    del out
+            _, avg_loss, _, _, _, _, end, _, _, _, _ = flor.skip_stack.pop(
+                ).proc_side_effects(optimizer, avg_loss, batch_time,
+                data_time, losses, ctc_time, end, time, loss.data,
+                torch.nn.utils, torch.cuda)
+            avg_loss /= len(train_loader)
+            print(
+                'Training Summary Epoch: [{0}]\tAverage Loss {loss:.3f}\t'
+                .format(epoch + 1, loss=avg_loss))
+            start_iter = 0
+            flor.namespace_stack.test_force(start_iter, 'start_iter')
+            total_cer, total_wer = 0, 0
+            flor.namespace_stack.test_force(total_cer, 'total_cer')
+            flor.namespace_stack.test_force(total_wer, 'total_wer')
+            model.eval()
+            wer, cer = eval_model(model, test_loader, decoder)
+            flor.namespace_stack.test_force(wer, 'wer')
+            flor.namespace_stack.test_force(cer, 'cer')
+            loss_results[epoch] = avg_loss
+            wer_results[epoch] = wer
+            cer_results[epoch] = cer
+            print(
+                'Validation Summary Epoch: [{0}]\tAverage WER {wer:.3f}\tAverage CER {cer:.3f}\t'
+                .format(epoch + 1, wer=wer, cer=cer))
+            if args.checkpoint:
+                file_path = '%s/deepspeech_%d.pth.tar' % (save_folder,
+                    epoch + 1)
+                flor.namespace_stack.test_force(file_path, 'file_path')
+                torch.save(DeepSpeech.serialize(model, optimizer=
+                    optimizer, epoch=epoch, loss_results=loss_results,
+                    wer_results=wer_results, cer_results=cer_results),
+                    file_path)
+            optim_state = optimizer.state_dict()
+            flor.namespace_stack.test_force(optim_state, 'optim_state')
+            optim_state['param_groups'][0]['lr'] = optim_state[
+                'param_groups'][0]['lr'] / params.learning_anneal
+            optimizer.load_state_dict(optim_state)
+            print('Learning rate annealed to: {lr:.6f}'.format(lr=
+                optim_state['param_groups'][0]['lr']))
+            if best_wer is None or best_wer > wer:
+                print('Found better validated model, saving to %s' %
+                    args.model_path)
+                torch.save(DeepSpeech.serialize(model, optimizer=
+                    optimizer, epoch=epoch, loss_results=loss_results,
+                    wer_results=wer_results, cer_results=cer_results),
+                    args.model_path)
+                best_wer = wer
+                flor.namespace_stack.test_force(best_wer, 'best_wer')
+            avg_loss = 0
+            flor.namespace_stack.test_force(avg_loss, 'avg_loss')
+            if params.exit_at_acc and best_wer <= args.acc:
+                break
+        flor.skip_stack.pop()
+        print('=======================================================')
+        print('***Best WER = ', best_wer)
+        flor.skip_stack.new(3, 0)
+        for arg in vars(args):
+            print('***%s = %s ' % (arg.ljust(25), getattr(args, arg)))
+        flor.skip_stack.pop()
+        print('=======================================================')
+    finally:
+        flor.namespace_stack.pop()
+
+
+if __name__ == '__main__':
+    main()
+    print(f'-----------------TOTAL TIME: {time.time() - start_time} ----------------------')
+    if not flor.SKIP:
+        flor.flush()
